@@ -6,6 +6,8 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from urllib.parse import urlparse
+from .routes import controlnet
+
 
 import uvicorn
 
@@ -29,6 +31,7 @@ app.add_middleware(
 app.include_router(query)
 app.include_router(generate)
 app.include_router(router)
+app.include_router(controlnet.router)
 
 
 @app.get("/", tags=["Query"])
