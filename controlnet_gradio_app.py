@@ -13,42 +13,30 @@ def encode_image_to_base64(image):
     image.save(buffered, format="PNG")
     return base64.b64encode(buffered.getvalue()).decode()
 
-def generate_images(person_image_dict, pose_image_dict, person_stop, person_weight, 
+def generate_images(person_file, pose_file, person_stop, person_weight, 
                    pose_stop, pose_weight):
     try:
-        # Extract filenames from the uploaded images
-        person_name = "person"
-        pose_name = "pose"
-        
-        # For person image
-        if isinstance(person_image_dict, dict) and 'source' in person_image_dict:
-            source_path = person_image_dict['source']
-            if isinstance(source_path, str):
-                person_name = os.path.splitext(os.path.basename(source_path))[0]
-                print(f"Person image source: {source_path}")
-
-        # For pose image
-        if isinstance(pose_image_dict, dict) and 'source' in pose_image_dict:
-            source_path = pose_image_dict['source']
-            if isinstance(source_path, str):
-                pose_name = os.path.splitext(os.path.basename(source_path))[0]
-                print(f"Pose image source: {source_path}")
+        # Extract original filenames 
+        person_name = os.path.splitext(person_file.name)[0]
+        pose_name = os.path.splitext(pose_file.name)[0]
 
         # Create output filename
         output_filename = f"{person_name}_{pose_name}.png"
-        
+
         # Create outputs directory if it doesn't exist
         os.makedirs("outputs", exist_ok=True)
         output_path = os.path.join("outputs", output_filename)
 
         # Print debug information
+        print(f"Person file: {person_file.name}")
+        print(f"Pose file: {pose_file.name}")
         print(f"Person name: {person_name}")
         print(f"Pose name: {pose_name}")
         print(f"Output filename: {output_filename}")
 
-        # Extract PIL images from the dictionaries
-        person_image = person_image_dict['image'] if isinstance(person_image_dict, dict) else person_image_dict
-        pose_image = pose_image_dict['image'] if isinstance(pose_image_dict, dict) else pose_image_dict
+        # Load images using PIL
+        person_image = Image.open(person_file.name)
+        pose_image = Image.open(pose_file.name)
 
         # Prepare API payload
         payload = {
@@ -75,27 +63,27 @@ def generate_images(person_image_dict, pose_image_dict, person_stop, person_weig
             headers={"Content-Type": "application/json"}
         )
         response.raise_for_status()
-        
+
         result = response.json()
-        
+
         if (isinstance(result, dict) and 
             'result' in result and 
             isinstance(result['result'], list) and 
             len(result['result']) > 0):
-            
+
             image_url = result['result'][0]
-            
+
             # Download the image
             image_response = requests.get(image_url)
             image_response.raise_for_status()
-            
+
             # Save the image
             with open(output_path, 'wb') as f:
                 f.write(image_response.content)
-            
+
             # Load the saved image
             generated_image = Image.open(output_path)
-            
+
             return (
                 generated_image,
                 f"Generated and saved as: {output_filename}",
@@ -113,15 +101,12 @@ def generate_images(person_image_dict, pose_image_dict, person_stop, person_weig
 def create_ui():
     with gr.Blocks(title="ControlNet Image Generator") as app:
         gr.Markdown("# ControlNet Image Generator")
-        
+
         with gr.Row():
             with gr.Column():
-                person_image = gr.Image(
+                person_file = gr.File(
                     label="Person Image (ImagePrompt)",
-                    type="pil",
-                    tool=None,
-                    source="upload",
-                    elem_id="person_image"
+                    file_types=["image"]
                 )
                 with gr.Row():
                     person_stop = gr.Slider(
@@ -132,14 +117,11 @@ def create_ui():
                         minimum=0, maximum=2, value=0.5,
                         label="Person Weight Value"
                     )
-                
+
             with gr.Column():
-                pose_image = gr.Image(
+                pose_file = gr.File(
                     label="Pose Image (CPDS)",
-                    type="pil",
-                    tool=None,
-                    source="upload",
-                    elem_id="pose_image"
+                    file_types=["image"]
                 )
                 with gr.Row():
                     pose_stop = gr.Slider(
@@ -161,7 +143,7 @@ def create_ui():
                 type="pil",
                 interactive=False
             )
-            
+
         with gr.Row():
             status_text = gr.Textbox(
                 label="Status",
@@ -172,7 +154,7 @@ def create_ui():
                 visible=True,
                 interactive=False
             )
-            
+
         download_btn = gr.File(
             label="Download Generated Image",
             interactive=True,
@@ -182,7 +164,7 @@ def create_ui():
         generate_btn.click(
             fn=generate_images,
             inputs=[
-                person_image, pose_image,
+                person_file, pose_file,
                 person_stop, person_weight,
                 pose_stop, pose_weight
             ],
@@ -191,8 +173,8 @@ def create_ui():
 
         def reset_interface():
             return {
-                person_image: None,
-                pose_image: None,
+                person_file: None,
+                pose_file: None,
                 person_stop: 0.6,
                 person_weight: 0.5,
                 pose_stop: 0.6,
@@ -207,7 +189,7 @@ def create_ui():
             fn=reset_interface,
             inputs=[],
             outputs=[
-                person_image, pose_image,
+                person_file, pose_file,
                 person_stop, person_weight,
                 pose_stop, pose_weight,
                 output_image, status_text, error_text,
